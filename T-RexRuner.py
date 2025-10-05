@@ -1,193 +1,249 @@
-from random import randrange as rnd
-from itertools import cycle
-from random import choice
-from PIL import  Image
 import pygame
-import time
-
+from pygame.locals import *
+from sys import exit
+import os
+from random import randrange, choice
 
 pygame.init()
-speed = 4
+pygame.mixer.init()
 
+diretorio_principal = os.path.dirname(__file__)
+diretorio_imagens = os.path.join(diretorio_principal, 'imagens')
+diretorio_sons = os.path.join(diretorio_principal, 'sons')
 
+LARGURA = 640
+ALTURA = 480
+    
+BRANCO = (255,255,255)
 
-# extracting game items and characters form the resource.png image.
-player_init = Image.open("resources.png").crop((77,5,163,96)).convert("RGBA")
-player_init = player_init.resize(list(map(lambda x:x//2 , player_init.size)))
+tela = pygame.display.set_mode((LARGURA, ALTURA))
 
-player_frame_1 = Image.open("resources.png").crop((1679,2,1765,95)).convert("RGBA")
-player_frame_1 = player_frame_1.resize(list(map(lambda x:x//2 , player_frame_1.size)))
+pygame.display.set_caption('Dino Game')
 
-player_frame_2 = Image.open("resources.png").crop((1767,2,1853,95)).convert("RGBA")
-player_frame_2 = player_frame_2.resize(list(map(lambda x:x//2 , player_frame_2.size)))
+sprite_sheet = pygame.image.load(os.path.join(diretorio_imagens, 'dinoSpritesheet.png')).convert_alpha()
 
-player_frame_3 = Image.open("resources.png").crop((1855,2,1941,95)).convert("RGBA")
-player_frame_3 = player_frame_3.resize(list(map(lambda x:x//2 , player_frame_3.size)))
+som_colisao = pygame.mixer.Sound(os.path.join(diretorio_sons, 'death_sound.wav'))
+som_colisao.set_volume(1)
 
-player_frame_31 = Image.open("resources.png").crop((1943,2,2029,95)).convert("RGBA")
-player_frame_31 = player_frame_31.resize(list(map(lambda x:x//2 , player_frame_31.size)))
+som_pontuacao = pygame.mixer.Sound(os.path.join(diretorio_sons, 'score_sound.wav'))
+som_pontuacao.set_volume(1)
 
-player_frame_4 = Image.open("resources.png").crop((2030,2,2117,95)).convert("RGBA")
-player_frame_4 = player_frame_4.resize(list(map(lambda x:x//2 , player_frame_4.size)))
+colidiu = False
 
-player_frame_5 = Image.open("resources.png").crop((2207,2,2323,95)).convert("RGBA")
-player_frame_5 = player_frame_5.resize(list(map(lambda x:x//2 , player_frame_5.size)))
+escolha_obstaculo = choice([0, 1])
 
-player_frame_6 = Image.open("resources.png").crop((2324,2,2441,95)).convert("RGBA")
-player_frame_6 = player_frame_6.resize(list(map(lambda x:x//2 , player_frame_6.size)))
+pontos = 0
 
-cloud = Image.open("resources.png").crop((166,2,257,29)).convert("RGBA")
-cloud = cloud.resize(list(map(lambda x:x//2 , cloud.size)))
+velocidade_jogo = 10
 
-ground = Image.open("resources.png").crop((2,102,2401,127)).convert("RGBA")
-ground = ground.resize(list(map(lambda x:x//2 , ground.size)))
+def exibe_mensagem(msg, tamanho, cor):
+    fonte = pygame.font.SysFont('comicsansms', tamanho, True, False)
+    mensagem = f'{msg}' 
+    texto_formatado = fonte.render(mensagem, True, cor)
+    return texto_formatado
 
-obstacle1 = Image.open("resources.png").crop((446,2,479,71)).convert("RGBA")
-obstacle1 = obstacle1.resize(list(map(lambda x:x//2 , obstacle1.size)))
+def reiniciar_jogo():
+    global pontos, velocidade_jogo, colidiu, escolha_obstaculo
+    pontos = 0
+    velocidade_jogo = 10
+    colidiu = False
+    dino.rect.y = ALTURA - 64 - 96//2
+    dino.pulo = False
+    dino_voador.rect.x = LARGURA
+    cacto.rect.x = LARGURA
+    escolha_obstaculo = choice([0, 1])
 
-obstacle2 = Image.open("resources.png").crop((446,2,547,71)).convert("RGBA")
-obstacle2 = obstacle2.resize(list(map(lambda x:x//2 , obstacle2.size)))
+class Dino(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.som_pulo = pygame.mixer.Sound(os.path.join(diretorio_sons, 'jump_sound.wav'))
+        self.som_pulo.set_volume(1)
+        self.imagens_dinossauro = []
+        for i in range(3):
+            img = sprite_sheet.subsurface((i * 32,0), (32,32))
+            img = pygame.transform.scale(img, (32*3, 32*3))
+            self.imagens_dinossauro.append(img)
+        
+        self.index_lista = 0
+        self.image = self.imagens_dinossauro[self.index_lista]
+        self.rect = self.image.get_rect()
+        self.mask = pygame.mask.from_surface(self.image)
+        self.pos_y_inicial = ALTURA - 64 - 96//2
+        self.rect.topleft = (100, self.pos_y_inicial) #368   416(centro y)
+        self.pulo = False
 
-obstacle3 = Image.open("resources.png").crop((446,2,581,71)).convert("RGBA")
-obstacle3 = obstacle3.resize(list(map(lambda x:x//2 , obstacle3.size)))
+    def pular(self):
+        self.pulo = True
+        self.som_pulo.play()
 
-obstacle4 = Image.open("resources.png").crop((653,2,701,101)).convert("RGBA")
-obstacle4 = obstacle4.resize(list(map(lambda x:x//2 , obstacle4.size)))
+    def update(self):
 
-obstacle5 = Image.open("resources.png").crop((653,2,701,101)).convert("RGBA")
-obstacle5 = obstacle5.resize(list(map(lambda x:x//2 , obstacle5.size)))
+        if self.pulo == True:
+            if self.rect.y <= self.pos_y_inicial - 150:
+                self.pulo = False
+            self.rect.y -= 15
 
-obstacle5 = Image.open("resources.png").crop((653,2,749,101)).convert("RGBA")
-obstacle5 = obstacle5.resize(list(map(lambda x:x//2 , obstacle5.size)))
+        else:
+            if self.rect.y >= self.pos_y_inicial:
+                self.rect.y = self.pos_y_inicial
+            else:
+                self.rect.y += 15
+        
+ 
+        if self.index_lista > 2:
+            self.index_lista = 0
+        self.index_lista += 0.25
+        self.image = self.imagens_dinossauro[int(self.index_lista)]
 
-obstacle6 = Image.open("resources.png").crop((851,2,950,101)).convert("RGBA")
-obstacle6 = obstacle6.resize(list(map(lambda x:x//2 , obstacle6.size)))
+class Nuvens(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = sprite_sheet.subsurface((7*32, 0), (32,32))
+        self.image = pygame.transform.scale(self.image, (32*3, 32*3))
+        self.rect = self.image.get_rect()
+        self.rect.y = randrange(50, 200, 50)
+        self.rect.x = LARGURA - randrange(30, 300, 90)
 
-speed_identifier = lambda x: 2 if x >= 30 else 8 if x < 8 else 5
-cust_speed = speed_identifier(speed)
-running = cycle([player_frame_3]*cust_speed+[player_frame_31]*cust_speed)
-crouch = cycle([player_frame_5]*cust_speed+ [player_frame_6]*cust_speed)
-crouch_scope = [player_frame_5]+[player_frame_6]
-obstacles = [obstacle1,obstacle2, obstacle3,obstacle4,obstacle5,obstacle6]
+    def update(self):
+        if self.rect.topright[0] < 0:
+            self.rect.x = LARGURA
+            self.rect.y = randrange(50, 200, 50)
+        self.rect.x -= velocidade_jogo
 
+class Chao(pygame.sprite.Sprite):
+    def __init__(self, pos_x):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = sprite_sheet.subsurface((6*32, 0), (32,32))
+        self.image = pygame.transform.scale(self.image, (32*2, 32*2))
+        self.rect = self.image.get_rect()
+        self.rect.y = ALTURA - 64
+        self.rect.x = pos_x * 64
 
-gameDisplay = pygame.display.set_mode((600,200))
-pygame.display.set_caption('T-Rex Runner')
-clock = pygame.time.Clock()
-state = player_frame_1
-crashed = False
-lock = False
-bg = (0, 150)
-bg1 = (600,150)
-start = False
-height = 110
-jumping = False
-slow_motion = False
-c1 = (rnd(30, 600), rnd(0, 100))
-c2 = (rnd(50,600), rnd(0, 100))
-c3 = (rnd(30,700), rnd(0, 100))
-c4 = (rnd(30,600),rnd(0, 100))
-obs1 = (rnd(600, 600+500), 130)
-obs2 = (rnd(600+100+500, 1200+500), 130)
-obs3 = (rnd(1700, 2000), 130)
-obast1 = choice(obstacles)
-if obast1 in [obstacle4, obstacle5, obstacle6]:obs1 = (obs1[0], 115)
-obast2 = choice(obstacles)
-if obast2 in [obstacle4, obstacle5, obstacle6]:obs2 = (obs2[0], 115)
-obast3 = choice(obstacles)
-if obast3 in [obstacle4, obstacle5, obstacle6]:obs3 = (obs3[0], 115)
+    def update(self):
+        if self.rect.topright[0] < 0:
+            self.rect.x = LARGURA
+        self.rect.x -= 10
+    
+class Cacto(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = sprite_sheet.subsurface((5*32, 0), (32,32))
+        self.image = pygame.transform.scale(self.image, (32*2, 32*2))
+        self.rect = self.image.get_rect()
+        self.mask = pygame.mask.from_surface(self.image)
+        self.escolha = escolha_obstaculo
+        self.rect.center = (LARGURA,  ALTURA - 64)
+        self.rect.x = LARGURA
 
-while not crashed:
-    gameDisplay.fill((255,255,255))
+    def update(self):
+        if self.escolha == 0:
+            if self.rect.topright[0] < 0:
+                self.rect.x = LARGURA
+            self.rect.x -= velocidade_jogo
+
+class DinoVoador(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.imagens_dinossauro = []
+        for i in range(3,5):
+            img = sprite_sheet.subsurface((i*32, 0), (32,32))
+            img = pygame.transform.scale(img, (32*3, 32*3))
+            self.imagens_dinossauro.append(img)
+
+        self.index_lista = 0
+        self.image = self.imagens_dinossauro[self.index_lista]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.escolha = escolha_obstaculo
+        self.rect = self.image.get_rect()
+        self.rect.center = (LARGURA, 300)
+        self.rect.x = LARGURA
+    
+    def update(self):
+        if self.escolha == 1:
+            if self.rect.topright[0] < 0:
+                self.rect.x = LARGURA
+            self.rect.x -= velocidade_jogo
+
+            if self.index_lista > 1:
+                self.index_lista = 0
+            self.index_lista += 0.25
+            self.image = self.imagens_dinossauro[int(self.index_lista)]
+
+todas_as_sprites = pygame.sprite.Group()
+dino = Dino()
+todas_as_sprites.add(dino)
+
+for i in range(4):
+    nuvem = Nuvens()
+    todas_as_sprites.add(nuvem)
+
+for i in range(LARGURA*2//64):
+    chao = Chao(i)
+    todas_as_sprites.add(chao)
+
+cacto = Cacto()
+todas_as_sprites.add(cacto)
+
+dino_voador = DinoVoador()
+todas_as_sprites.add(dino_voador)
+
+grupo_obstaculos = pygame.sprite.Group()
+grupo_obstaculos.add(cacto)
+grupo_obstaculos.add(dino_voador)
+
+relogio = pygame.time.Clock()
+while True:
+    relogio.tick(30)
+    tela.fill(BRANCO)
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            crashed = True
-        if event.type==pygame.KEYDOWN:
-            start = True
-            if event.key == pygame.K_DOWN:
-                slow_motion = True
-                state = crouch
-            if event.key == pygame.K_UP:
-                if height >= 110:jumping = True
-        if event.type==pygame.KEYUP:
-            slow_motion = False
-            if event.key == pygame.K_DOWN:
-                state = running
-    player = state if type(state) != cycle else next(state)
-    gameDisplay.blit(pygame.image.fromstring(cloud.tobytes(), cloud.size, 'RGBA'), c1)
-    gameDisplay.blit(pygame.image.fromstring(cloud.tobytes(), cloud.size, 'RGBA'), c2)
-    gameDisplay.blit(pygame.image.fromstring(cloud.tobytes(), cloud.size, 'RGBA'), c3)
-    gameDisplay.blit(pygame.image.fromstring(cloud.tobytes(), cloud.size, 'RGBA'), c4)
-    c1 = (c1[0]-1, c1[1])
-    c2 = (c2[0]-1, c2[1])
-    c3 = (c3[0]-1, c3[1])
-    c4 = (c4[0]-1, c4[1])
-    if c1[0]<= -50:
-        c1 = (640, c1[1])
-    if c2[0]<= -50:
-        c2 = (700, c2[1])
-    if c3[0]<= -50:
-        c3 = (600, c3[1])
-    if c4[0]<= -50:
-        c4 = (800, c4[1])
-    gameDisplay.blit(pygame.image.fromstring(ground.tobytes(), ground.size, 'RGBA'), bg)
-    gameDisplay.blit(pygame.image.fromstring(ground.tobytes(), ground.size, 'RGBA'), bg1)
-    if jumping:
-        if height>=110-100:
-            height -= 4
-        if height <= 110-100:
-            jumping = False
-    if height<110 and not jumping:
-        if slow_motion == True:
-            height += 1.5
-        else:height += 3
-    player = gameDisplay.blit(pygame.image.fromstring(player.tobytes(), player.size, 'RGBA'), (5,height))
-    gameDisplay.blit(pygame.image.fromstring(obast1.tobytes(), obast1.size, 'RGBA'), obs1)
-    gameDisplay.blit(pygame.image.fromstring(obast2.tobytes(), obast2.size, 'RGBA'), obs2)
-    gameDisplay.blit(pygame.image.fromstring(obast3.tobytes(), obast3.size, 'RGBA'), obs3)
-    if obs1[0]<=-50:
-        obs1 = (rnd(600, 600+500), 130)
-        obast1 = choice(obstacles)
-        if obast1 in [obstacle4, obstacle5, obstacle6]:obs1 = (obs1[0], 115)
-    if obs2[0]<=-50:
-        obs2 = (rnd(600+100+500, 1200+500), 130)
-        obast2 = choice(obstacles)
-        if obast2 in [obstacle4, obstacle5, obstacle6]:obs2 = (obs2[0], 115)
-    if obs3[0]<=-50:
-        obs3 = (rnd(1700, 2000), 130) 
-        obast3 = choice(obstacles) 
-        if obast3 in [obstacle4, obstacle5, obstacle6]:obs3 = (obs3[0], 115)
-    player_stading_cub = (5, height, 5+43,height+46)
-    if height< 100:
-        start=True
-    if start:
-        obs1 = (obs1[0]-speed, obs1[1])
-        obs2 = (obs2[0]-speed, obs2[1])
-        obs3 = (obs3[0]-speed, obs3[1])
-        obs1_cub = (obs1[0], obs1[1], obs1[0]+obast1.size[0],obs1[1]+obast1.size[1])
-        obs2_cub = (obs2[0], obs2[1], obs2[0]+obast2.size[0],obs2[1]+obast2.size[1])
-        obs3_cub = (obs3[0], obs3[1], obs3[0]+obast3.size[0],obs3[1]+obast3.size[1])
-        if not lock:
-            bg = (bg[0]-speed, bg[1])
-            if bg[0]<=-(600):
-                lock = 1
-        if -bg[0]>=600 and lock:
-            bg1 = (bg1[0]-speed, bg1[1])
-            bg = (bg[0]-speed, bg[1])
-            if -bg1[0]>=600:bg = (600,150)
-        if -bg1[0]>=600 and lock:
-            bg = (bg[0]-speed, bg1[1])
-            bg1 = (bg1[0]-speed, bg1[1])
-            if -bg[0]>=600:bg1 = (600,150)
+        if event.type == QUIT:
+            pygame.quit()
+            exit()
+        if event.type == KEYDOWN:
+            if event.key == K_SPACE and colidiu == False:
+                if dino.rect.y != dino.pos_y_inicial:
+                    pass
+                else:
+                    dino.pular()
 
-        if obs1_cub[0]<=player_stading_cub[2]-10<=obs1_cub[2] and obs1_cub[1]<=player_stading_cub[3]-10<=obs1_cub[3]-5:
-            start=False
-            state = player_frame_4
-        if obs2_cub[0]<=player_stading_cub[2]-10<=obs2_cub[2] and obs2_cub[1]<=player_stading_cub[3]-10<=obs2_cub[3]-5:
-            start=False
-            state = player_frame_4
-        if obs3_cub[0]<=player_stading_cub[2]-10<=obs3_cub[2] and obs3_cub[1]<=player_stading_cub[3]-10<=obs3_cub[3]-5:
-            start=False
-            state = player_frame_4
-    pygame.display.update()
-    clock.tick(120)
+            if event.key == K_r and colidiu == True:
+                reiniciar_jogo()
+
+    colisoes = pygame.sprite.spritecollide(dino, grupo_obstaculos, False, pygame.sprite.collide_mask)
+
+    todas_as_sprites.draw(tela)
+
+    if cacto.rect.topright[0] <= 0 or dino_voador.rect.topright[0] <= 0:
+        escolha_obstaculo = choice([0, 1])
+        cacto.rect.x = LARGURA
+        dino_voador.rect.x = LARGURA
+        cacto.escolha = escolha_obstaculo
+        dino_voador.escolha = escolha_obstaculo
+
+    if colisoes and colidiu == False:
+        som_colisao.play()
+        colidiu = True
+
+    if colidiu == True:
+        if pontos % 100 == 0:
+            pontos += 1
+        game_over = exibe_mensagem('GAME OVER', 40, (0,0,0))
+        tela.blit(game_over, (LARGURA//2, ALTURA//2))
+        restart = exibe_mensagem('Pressione r para reiniciar', 20, (0,0,0))
+        tela.blit(restart, (LARGURA//2, (ALTURA//2) + 60))
+
+    else:
+        pontos += 1
+        todas_as_sprites.update()
+        texto_pontos = exibe_mensagem(pontos, 40, (0,0,0))
+
+    if pontos % 100 == 0:
+        som_pontuacao.play()
+        if velocidade_jogo >= 23:
+            velocidade_jogo += 0
+        else:
+            velocidade_jogo += 1
+        
+    tela.blit(texto_pontos, (520, 30))
+
+    pygame.display.flip()
